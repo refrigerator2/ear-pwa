@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E5A66">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ear Check">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Ear Check</title>
+<style>
+  :root {
+    --bg: #EEF2F3;
+    --ink: #12222B;
+    --muted: #5B6B75;
+    --line: #CBD5DA;
+    --accent: #0E5A66;
+    --ok-fg: #17653F;     --ok-bg: #E1F2E8;
+    --watch-fg: #7A4F00;  --watch-bg: #FAEFD3;
+    --doc-fg: #9E1A1A;    --doc-bg: #FBE3E0;
+    --retake-fg: #2F4B66; --retake-bg: #E3EBF3;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.45;
+    -webkit-text-size-adjust: 100%;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+             env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  main { max-width: 460px; margin: 0 auto; padding: 20px 20px 32px; }
+  h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 0.95rem; margin: 0 0 22px; }
+
+  /* The ring shows exactly the area the model sees. */
+  .ring-wrap { display: flex; justify-content: center; margin: 0 0 20px; }
+  .ring {
+    width: min(78vw, 320px); aspect-ratio: 1; border-radius: 50%;
+    border: 2px dashed var(--line); background: #E2E9EC;
+    display: grid; place-items: center; overflow: hidden; position: relative;
+    transition: border-color .2s;
+  }
+  .ring.has-photo { border: 3px solid var(--ink); background: #000; }
+  .ring canvas { width: 100%; height: 100%; display: none; }
+  .ring.has-photo canvas { display: block; }
+  .ring .hint { color: var(--muted); font-size: 0.95rem; text-align: center; padding: 0 18%; }
+  .ring.has-photo .hint { display: none; }
+  .ring.busy::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 4px solid transparent; border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .ring.busy::after { animation-duration: 3s; } }
+
+  .actions { display: grid; gap: 10px; margin-bottom: 22px; }
+  button {
+    font: inherit; font-weight: 600; min-height: 52px; border-radius: 14px;
+    border: 2px solid var(--accent); cursor: pointer; padding: 0 16px;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button:focus-visible { outline: 3px solid #7FC4CF; outline-offset: 2px; }
+
+  .status { color: var(--muted); font-size: 0.9rem; text-align: center; min-height: 1.3em; margin: -10px 0 18px; }
+  .status.error { color: var(--doc-fg); }
+
+  .result { border-radius: 16px; padding: 16px 18px; display: none; }
+  .result.show { display: block; }
+  .result h2 { font-size: 1.15rem; margin: 0 0 6px; line-height: 1.25; }
+  .result p { margin: 0; font-size: 0.97rem; }
+  .result.ok     { background: var(--ok-bg);     color: var(--ok-fg); }
+  .result.watch  { background: var(--watch-bg);  color: var(--watch-fg); }
+  .result.doctor { background: var(--doc-bg);    color: var(--doc-fg); }
+  .result.retake { background: var(--retake-bg); color: var(--retake-fg); }
+
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 0.92rem; padding: 6px 0; }
+  .bars { display: grid; gap: 8px; margin-top: 8px; }
+  .row { display: grid; grid-template-columns: 1fr 44px; gap: 4px 10px; align-items: center; font-size: 0.88rem; }
+  .row .track { grid-column: 1 / 2; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .row .fill { height: 100%; background: var(--accent); }
+  .row .pct { grid-row: 1 / 3; grid-column: 2; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .disclaimer { color: var(--muted); font-size: 0.82rem; margin-top: 26px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ear Check</h1>
+  <p class="sub">Photograph the eardrum through the otoscope clip. The analysis runs on this phone, no internet needed.</p>
+
+  <div class="ring-wrap">
+    <div class="ring" id="ring">
+      <canvas id="view" width="224" height="224" aria-label="Part of the photo analysed by the model"></canvas>
+      <div class="hint">The area the model analyses will appear here</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btnCamera" disabled>Take photo</button>
+    <button class="secondary" id="btnLibrary" disabled>Choose from library</button>
+  </div>
+  <div class="status" id="status" role="status">Loading model…</div>
+
+  <section class="result" id="result" aria-live="polite">
+    <h2 id="rTitle"></h2>
+    <p id="rText"></p>
+  </section>
+
+  <details id="details" hidden>
+    <summary>Model scores for each condition</summary>
+    <div class="bars" id="bars"></div>
+  </details>
+
+  <p class="disclaimer">Educational prototype. Not a medical device and not a diagnosis. If there is pain, discharge or hearing loss, see a doctor whatever the result says.</p>
+</main>
+
+<input type="file" id="inCamera" accept="image/*" capture="environment" hidden>
+<input type="file" id="inLibrary" accept="image/*" hidden>
+
+<script src="ort/ort.wasm.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
